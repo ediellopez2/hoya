@@ -7,30 +7,32 @@ from twilio.rest import Client            # Twilio
 from datetime import datetime             # Display Time
 import time                               # Go To Sleep
 
-def sendEmail(subject, recepient, message):
+
+def send_email(subject, recipient, message):
     msg = EmailMessage()
     msg['Subject'] = subject
     msg['From'] = variables.EMAIL_USER
-    msg['To'] = recepient
+    msg['To'] = recipient
     msg.set_content(message)
 
     with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
         smtp.login(variables.EMAIL_USER, variables.EMAIL_PASS)
         smtp.send_message(msg)
 
-def send_sms(recepient, message):
+
+def send_sms(recipient, message):
     client = Client(variables.TWILIO_ACCOUNT_SID, variables.TWILIO_AUTH_TOKEN)
 
     client.messages.create(
         body=message,
         from_=variables.number_twilio,
-        to=recepient
+        to=recipient
     )
     return
 
+
 #                             Web Scraping
 # =======================================================================
-
 URL = ['https://gardinonursery.com/product-category/categories/hoyas/hoyas-list-full/',
        'https://gardinonursery.com/product-category/categories/hoyas/hoyas-list-full/page/2/',
        'https://gardinonursery.com/product-category/categories/hoyas/hoyas-list-full/page/3/',
@@ -39,9 +41,15 @@ headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.114 Safari/537.36'}
 
 if __name__ == "__main__":
-    new_sum = 0
-    old_sum = 0
-    while (True):
+    # These two variables store the previous and current number of listings.
+    new_listings = 0
+    old_listings = 0
+    # These two variables store the previous and current number of listings that is
+    # actually available for purchase (Add to cart).
+    new_available = 0
+    old_available = 0
+
+    while True:
         try:
             for page in URL:
                 page = requests.get(page, headers=headers)
@@ -55,31 +63,49 @@ if __name__ == "__main__":
 
                     # Find all of list items in the unordered list.
                     listings = find_listings.find_all('li')
-                    new_sum = new_sum + len(listings)
 
-            if (old_sum != new_sum):
-                message = datetime.now().strftime('%Y-%m-%d %H:%M:%S').__str__() + ": There's been a change in the number of items up for sale." \
-                            "Records show the number of items up for sale has changed from " + str(old_sum) + " to " + str(new_sum)
-                sendEmail('Gardino Nursery Notification Bot', variables.EMAIL_TO_SISTER, message)
+                    # Update the number of listings.
+                    new_listings = new_listings + len(listings)
+
+                    # You currently have all of the listings stored in a Python List.
+                    # Determine the number of items that is available for purchase (Add to cart).
+                    for item in listings:
+                        status = item.find_all('a')[1]
+                        if status.text == 'Add to cart':
+                            new_available = new_available + 1
+
+            if (old_listings != new_listings) or (old_available != new_available):
+                message = datetime.now().strftime('%Y-%m-%d %H:%M:%S').__str__() + ": There's been a change!\n" \
+                            "# of items listed: " + str(old_listings) + " to " + str(new_listings) + ".\n" \
+                            "# of items available for purchase: " + str(old_available) + " to " + str(new_available) + "."
+                send_email('Gardino Nursery Notification Bot', variables.EMAIL_TO_SISTER, message)
                 send_sms(variables.number_sister, message)
                 send_sms(variables.number_ediel, message)
             else:
-                message = datetime.now().strftime('%Y-%m-%d %H:%M:%S').__str__() + ": There's been no change in the number of items up for sale."
+                message = datetime.now().strftime('%Y-%m-%d %H:%M:%S').__str__() + ": There's been no change."
 
-            # Print message to the console.
             print(message)
-            old_sum = new_sum
-            new_sum = 0
+            old_listings = new_listings
+            new_listings = 0
 
-            time.sleep(30)
+            old_available = new_available
+            new_available = 0
+
+            time.sleep(30)  # 30 seconds
             # =======================================================================
-        except Exception as e:
+        except requests.exceptions.ConnectionError as errc:
+            # In the event of a network problem (e.g. DNS failure, refused connection, etc),
+            # Requests will raise a ConnectionError exception.
+            print("OOPS!! Connection Error. Make sure you are connected to Internet. Technical Details given below.")
+            print(errc.__str__())
 
-            # Print to the console.
-            errorMessage = "AN ERROR OCCURRED AT " + datetime.now().strftime('%Y-%m-%d %H:%M:%S').__str__() + "!\nHere is the specific error:\n\n" + e.__str__()
-            print(errorMessage)
+            # Sleep for 1 minute and try to run the program again.
+            time.sleep(60)  # 1 minute
+            continue
+        except Exception as exc:
+            # This block will execute when an unexpected error that is unrelated to connection error occurs.
+            errorMessage = "AN ERROR OCCURRED AT " + datetime.now().strftime('%Y-%m-%d %H:%M:%S').__str__() + "!\n"
+            print(errorMessage + "Here is the specific error:\n" + exc.__str__())
 
-            # Create message and send the email.
-            sendEmail('Problem: Gardino Nursery Notification Bot', errorMessage)
-            send_sms(variables.number_ediel, message)
+            send_sms(variables.number_ediel, errorMessage)
             break
