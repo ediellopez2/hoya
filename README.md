@@ -10,3 +10,6 @@ Completed Iterations:
 
 Current Iteration:
 - sends the customer an email and text message via Twilio when a restock is taking place. Also emails me in the event of an unexpected error. [DONE/COMPLETED/IN USE - 4/9/2021 - restock.py]
+
+
+![hoya_bot](https://user-images.githubusercontent.com/25853747/120083428-83d2b000-c07d-11eb-842e-8a656a303a0b.jpg)
